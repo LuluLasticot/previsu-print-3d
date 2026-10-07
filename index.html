@@ -1,0 +1,1020 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prévisu Print 3D — Aperçu réaliste de vos imprimés</title>
+<style>
+  :root{
+    --bg:#14171c; --bg2:#1b1f26; --line:#2a2f38; --txt:#e8eaee; --muted:#9aa3b2;
+    --accent:#ff6a3d; --accent2:#ffb27a; --ok:#4cd97b; --warn:#ffcc4d; --bad:#ff5c5c;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  html,body{height:100%}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif;
+    background:var(--bg); color:var(--txt); display:flex; overflow:hidden;
+  }
+  /* ---------- Sidebar ---------- */
+  #panel{
+    width:330px; min-width:330px; height:100%; overflow-y:auto;
+    background:var(--bg); border-right:1px solid var(--line);
+    padding:20px 18px 40px; scrollbar-width:thin;
+  }
+  #panel h1{font-size:17px; letter-spacing:.3px; display:flex; align-items:center; gap:9px; margin-bottom:2px}
+  #panel h1 .logo{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:inline-flex;align-items:center;justify-content:center;font-size:14px}
+  #panel .tagline{font-size:11.5px;color:var(--muted);margin-bottom:18px}
+  .section{margin-bottom:18px; background:var(--bg2); border:1px solid var(--line); border-radius:12px; padding:13px 14px}
+  .section h2{font-size:11px; text-transform:uppercase; letter-spacing:1.2px; color:var(--muted); margin-bottom:10px}
+  label{font-size:12px; color:var(--muted); display:block; margin:8px 0 4px}
+  select,input[type=number]{
+    width:100%; background:#0f1216; color:var(--txt); border:1px solid var(--line);
+    border-radius:8px; padding:8px 10px; font-size:13px; outline:none;
+  }
+  select:focus,input[type=number]:focus{border-color:var(--accent)}
+  .row{display:flex; gap:8px}
+  .row>*{flex:1}
+  .seg{display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden}
+  .seg button{
+    flex:1; background:#0f1216; color:var(--muted); border:none; padding:8px 4px;
+    font-size:12px; cursor:pointer; transition:.15s;
+  }
+  .seg button.on{background:var(--accent); color:#fff}
+  input[type=range]{width:100%; accent-color:var(--accent); cursor:pointer}
+  .slider-line{display:flex; align-items:center; gap:10px; margin-top:4px}
+  .slider-line output{font-size:12px; color:var(--accent2); min-width:44px; text-align:right; font-variant-numeric:tabular-nums}
+  .drop{
+    border:1.5px dashed var(--line); border-radius:10px; padding:12px 10px; text-align:center;
+    cursor:pointer; transition:.15s; margin-top:6px; font-size:12.5px; color:var(--muted);
+  }
+  .drop:hover,.drop.over{border-color:var(--accent); color:var(--txt); background:rgba(255,106,61,.06)}
+  .drop .fname{color:var(--accent2); font-size:11.5px; margin-top:3px; word-break:break-all}
+  .drop .icon{font-size:19px; display:block; margin-bottom:3px}
+  .btn{
+    width:100%; background:linear-gradient(135deg,var(--accent),#ff8a4d); color:#fff; border:none;
+    border-radius:9px; padding:10px; font-size:13px; font-weight:600; cursor:pointer; margin-top:8px;
+    transition:.15s;
+  }
+  .btn:hover{filter:brightness(1.1)}
+  .btn.ghost{background:#0f1216; border:1px solid var(--line); color:var(--txt); font-weight:500}
+  .btn.ghost:hover{border-color:var(--accent)}
+  .check{display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--txt); margin-top:9px; cursor:pointer}
+  .check input{accent-color:var(--accent)}
+  #infos{font-size:12px; line-height:1.75; color:var(--muted)}
+  #infos b{color:var(--txt); font-weight:600}
+  .dpi-ok{color:var(--ok)} .dpi-warn{color:var(--warn)} .dpi-bad{color:var(--bad)}
+  .hint{font-size:11px; color:var(--muted); margin-top:8px; line-height:1.5}
+  /* ---------- Stage ---------- */
+  #stage{flex:1; position:relative; overflow:hidden;
+    background:radial-gradient(ellipse at 50% 35%, #f6f7f9 0%, #dfe3e9 55%, #c9cfd8 100%);
+    transition:background .4s;
+  }
+  #stage.dark{background:radial-gradient(ellipse at 50% 35%, #2b313b 0%, #171b21 60%, #0d0f13 100%)}
+  #stage canvas{display:block}
+  #toast{
+    position:absolute; left:50%; bottom:26px; transform:translateX(-50%);
+    background:rgba(18,20,25,.92); color:#fff; padding:9px 18px; border-radius:20px;
+    font-size:12.5px; opacity:0; pointer-events:none; transition:opacity .25s; z-index:10;
+    border:1px solid var(--line);
+  }
+  #toast.show{opacity:1}
+  #stagebar{
+    position:absolute; top:14px; right:14px; display:flex; gap:8px; z-index:5;
+  }
+  #stagebar button{
+    background:rgba(18,20,25,.82); border:1px solid var(--line); color:#e8eaee;
+    border-radius:9px; padding:7px 12px; font-size:12px; cursor:pointer; backdrop-filter:blur(6px);
+  }
+  #stagebar button:hover{border-color:var(--accent)}
+  #dropOverlay{
+    position:fixed; inset:0; background:rgba(255,106,61,.13); border:3px dashed var(--accent);
+    display:none; align-items:center; justify-content:center; z-index:50;
+    font-size:22px; font-weight:600; color:var(--accent); pointer-events:none;
+  }
+  #dropOverlay.show{display:flex}
+  body.client .pro-only{display:none}
+  @media (max-width:760px){
+    body{flex-direction:column}
+    #panel{width:100%; min-width:0; height:46%; border-right:none; border-bottom:1px solid var(--line)}
+    #stage{height:54%}
+  }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+</head>
+<body>
+<script id="shareData" type="application/json">null</script>
+
+<aside id="panel">
+  <h1><span class="logo">◈</span> Prévisu Print 3D</h1>
+  <p class="tagline">Aperçu 3D réaliste de vos imprimés — pour graphistes &amp; infographistes</p>
+
+  <div class="section pro-only">
+    <h2>Produit</h2>
+    <select id="product">
+      <option value="flyer">Flyer / Affichette</option>
+      <option value="carte">Carte de visite</option>
+      <option value="depliant2">Dépliant 2 volets (pli simple)</option>
+      <option value="depliant3r" selected>Dépliant 3 volets (pli roulé)</option>
+      <option value="depliant3z">Dépliant 3 volets (pli accordéon / Z)</option>
+      <option value="fenetre">Dépliant pli fenêtre</option>
+      <option value="livret">Livret / Brochure agrafée</option>
+      <option value="livre">Livre / Catalogue</option>
+    </select>
+
+    <label>Format fermé</label>
+    <select id="format">
+      <option value="A4">A4 — 210 × 297 mm</option>
+      <option value="A5">A5 — 148 × 210 mm</option>
+      <option value="A6">A6 — 105 × 148 mm</option>
+      <option value="DL" selected>DL — 99 × 210 mm</option>
+      <option value="CARRE">Carré — 210 × 210 mm</option>
+      <option value="CB">Carte de visite — 85 × 54 mm</option>
+      <option value="CUSTOM">Personnalisé…</option>
+    </select>
+    <div class="row" id="customRow" style="display:none; margin-top:6px">
+      <div><label>Largeur (mm)</label><input type="number" id="customW" value="210" min="20" max="1000"></div>
+      <div><label>Hauteur (mm)</label><input type="number" id="customH" value="297" min="20" max="1000"></div>
+    </div>
+
+    <label>Orientation</label>
+    <div class="seg" id="orientSeg">
+      <button data-v="portrait" class="on">Portrait</button>
+      <button data-v="paysage">Paysage</button>
+    </div>
+  </div>
+
+  <div class="section pro-only">
+    <h2>Papier &amp; finition</h2>
+    <div class="row">
+      <div>
+        <label>Grammage</label>
+        <select id="paper">
+          <option value="90">90 g/m²</option>
+          <option value="135">135 g/m²</option>
+          <option value="170" selected>170 g/m²</option>
+          <option value="250">250 g/m²</option>
+          <option value="350">350 g/m²</option>
+        </select>
+      </div>
+      <div>
+        <label>Finition</label>
+        <select id="finish">
+          <option value="mat" selected>Mat</option>
+          <option value="brillant">Brillant</option>
+          <option value="soft">Soft touch</option>
+        </select>
+      </div>
+    </div>
+    <div id="pagesCountWrap" style="display:none">
+      <label>Nombre de pages (sans PDF)</label>
+      <div class="slider-line">
+        <input type="range" id="pagesCount" min="4" max="48" step="4" value="8">
+        <output id="pagesCountOut">8 p.</output>
+      </div>
+    </div>
+  </div>
+
+  <div class="section pro-only">
+    <h2>Vos fichiers</h2>
+    <div class="drop" id="dropRecto">
+      <span class="icon">📄</span>
+      <b>Recto</b> — PDF, PNG ou JPG<br>cliquer ou glisser-déposer
+      <div class="fname" id="fnameRecto"></div>
+    </div>
+    <div class="drop" id="dropVerso">
+      <span class="icon">📄</span>
+      <b>Verso</b> — PDF, PNG ou JPG
+      <div class="fname" id="fnameVerso"></div>
+    </div>
+    <input type="file" id="fileRecto" accept=".pdf,.png,.jpg,.jpeg,.webp" hidden>
+    <input type="file" id="fileVerso" accept=".pdf,.png,.jpeg,.jpg,.webp" hidden>
+    <p class="hint">💡 Un PDF multipage sur « Recto » remplit automatiquement recto + verso, et toutes les pages pour un livret/livre.</p>
+  </div>
+
+  <div class="section" id="foldSection">
+    <h2>Pliage</h2>
+    <div class="slider-line">
+      <input type="range" id="foldSlider" min="0" max="100" value="100">
+      <output id="foldOut">100 %</output>
+    </div>
+    <button class="btn ghost" id="foldToggle">▶ Plier / Déplier</button>
+  </div>
+
+  <div class="section" id="pageSection" style="display:none">
+    <h2>Feuilletage</h2>
+    <div class="slider-line">
+      <input type="range" id="pageSlider" min="0" max="4" step="1" value="0">
+      <output id="pageOut">Couv.</output>
+    </div>
+    <button class="btn ghost" id="pageNext">▶ Tourner la page</button>
+  </div>
+
+  <div class="section">
+    <h2>Aperçu</h2>
+    <label class="check"><input type="checkbox" id="autoRotate"> Rotation automatique</label>
+    <button class="btn ghost" id="resetView">🎯 Recentrer la vue</button>
+    <button class="btn" id="capture">📸 Capturer l'aperçu (PNG)</button>
+  </div>
+
+  <div class="section pro-only">
+    <h2>Partage client</h2>
+    <button class="btn" id="shareBtn">🔗 Générer l'aperçu client</button>
+    <p class="hint">Télécharge une page HTML autonome contenant votre design : envoyez-la au client (mail, WeTransfer…). Il l'ouvre d'un double-clic et manipule l'aperçu 3D — pliage, feuilletage, rotation — sans pouvoir rien modifier. Si votre site est hébergé (Netlify, Vercel…), déposez-y ce fichier pour obtenir un simple lien à partager.</p>
+  </div>
+
+  <div class="section">
+    <h2>Informations</h2>
+    <div id="infos"></div>
+  </div>
+</aside>
+
+<main id="stage">
+  <div id="stagebar">
+    <button id="themeToggle">🌗 Fond</button>
+  </div>
+  <div id="toast"></div>
+</main>
+
+<div id="dropOverlay">Déposez votre fichier ici</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+/* ================= Config ================= */
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+
+const MM = 0.1;          // 1 unité scène = 10 mm
+const TH = 3.0;          // exagération d'épaisseur (lisibilité 3D)
+const MAX_PDF_PAGES = 40;
+
+const FORMATS = {
+  A4:{w:210,h:297}, A5:{w:148,h:210}, A6:{w:105,h:148},
+  DL:{w:99,h:210}, CARRE:{w:210,h:210}, CB:{w:85,h:54}
+};
+const PAPER_T = {90:0.10, 135:0.14, 170:0.19, 250:0.29, 350:0.40}; // mm
+const FINISH = {
+  mat:      {rough:0.62, cc:0.0, env:0.55},
+  brillant: {rough:0.18, cc:0.65, env:1.15},
+  soft:     {rough:0.88, cc:0.0, env:0.35}
+};
+const PRODUCTS = {
+  flyer:      {label:'Flyer',                 kind:'flat'},
+  carte:      {label:'Carte de visite',       kind:'flat'},
+  depliant2:  {label:'Dépliant 2 volets',     kind:'fold'},
+  depliant3r: {label:'Dépliant 3 volets roulé', kind:'fold'},
+  depliant3z: {label:'Dépliant 3 volets Z',   kind:'fold'},
+  fenetre:    {label:'Dépliant pli fenêtre',  kind:'fold'},
+  livret:     {label:'Livret agrafé',         kind:'book'},
+  livre:      {label:'Livre / Catalogue',     kind:'book'}
+};
+const DEFAULT_FORMAT = {
+  flyer:'A5', carte:'CB', depliant2:'A5', depliant3r:'DL',
+  depliant3z:'DL', fenetre:'DL', livret:'A5', livre:'A5'
+};
+
+const state = {
+  product:'depliant3r', format:'DL', customW:210, customH:297, orientation:'portrait',
+  paper:170, finish:'mat', pagesCount:8,
+  recto:null, verso:null, pages:[],          // THREE.Texture
+  rectoInfo:null, versoInfo:null,            // {px, type, name}
+  foldTarget:1, foldCur:1, page:0
+};
+
+/* ================= Scène 3D ================= */
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({antialias:true, alpha:true, logarithmicDepthBuffer:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 4000);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.maxPolarAngle = Math.PI * 0.95;
+
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+const hemi = new THREE.HemisphereLight(0xffffff, 0x8899aa, 0.5);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.bias = -0.0004;
+sun.shadow.radius = 6;
+scene.add(sun);
+
+const groundMat = new THREE.ShadowMaterial({opacity:0.22});
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), groundMat);
+ground.rotation.x = -Math.PI/2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+let productGroup = null;   // groupe courant
+let currentBuild = null;   // {kind, applyFold?, sheets?, openW, openH, closedW, closedH}
+
+function resize(){
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+
+/* ================= Utilitaires ================= */
+const $ = id => document.getElementById(id);
+const rad = d => d * Math.PI / 180;
+const ease = t => t*t*(3-2*t); // smoothstep
+const clamp01 = v => Math.min(1, Math.max(0, v));
+
+function toast(msg, ms=2600){
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._h);
+  t._h = setTimeout(()=>t.classList.remove('show'), ms);
+}
+
+function closedSize(){
+  let f = state.format === 'CUSTOM'
+    ? {w:state.customW, h:state.customH}
+    : FORMATS[state.format];
+  let w = f.w, h = f.h;
+  if (state.orientation === 'paysage') [w, h] = [h, w];
+  return {w, h};
+}
+function paperThicknessU(){
+  const base = state.product==='livre' ? Math.max(PAPER_T[state.paper], 0.19) : PAPER_T[state.paper];
+  return base * TH * MM;
+}
+
+/* --------- Textures --------- */
+function srgb(tex){
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return tex;
+}
+function region(tex, ox, rx){
+  if (!tex) return null;
+  const c = tex.clone();
+  c.wrapS = c.wrapT = THREE.ClampToEdgeWrapping;
+  c.offset.set(ox, 0);
+  c.repeat.set(rx, 1);
+  c.needsUpdate = true;
+  return srgb(c);
+}
+function makePlaceholder(wmm, hmm, label, guides = []){
+  const scale = Math.min(4, 2000 / Math.max(wmm, hmm));
+  const cw = Math.round(wmm * scale), ch = Math.round(hmm * scale);
+  const cv = document.createElement('canvas');
+  cv.width = cw; cv.height = ch;
+  const g = cv.getContext('2d');
+  const grad = g.createLinearGradient(0, 0, cw, ch);
+  grad.addColorStop(0, '#f4f1ea'); grad.addColorStop(1, '#e3ded2');
+  g.fillStyle = grad; g.fillRect(0, 0, cw, ch);
+  // marges
+  const m = 5 * scale;
+  g.strokeStyle = 'rgba(120,110,95,.45)'; g.lineWidth = 1.2;
+  g.setLineDash([6, 5]);
+  g.strokeRect(m, m, cw - 2*m, ch - 2*m);
+  g.setLineDash([]);
+  // repères de pli
+  g.strokeStyle = 'rgba(255,106,61,.65)'; g.lineWidth = 2;
+  g.setLineDash([10, 7]);
+  for (const gx of guides){
+    const x = gx * scale;
+    g.beginPath(); g.moveTo(x, 0); g.lineTo(x, ch); g.stroke();
+  }
+  g.setLineDash([]);
+  // libellé
+  g.fillStyle = 'rgba(90,82,70,.85)';
+  g.font = `600 ${Math.round(Math.min(cw,ch)*0.09)}px -apple-system,Segoe UI,sans-serif`;
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(label, cw/2, ch/2);
+  g.font = `${Math.round(Math.min(cw,ch)*0.045)}px -apple-system,Segoe UI,sans-serif`;
+  g.fillStyle = 'rgba(90,82,70,.55)';
+  g.fillText(`${Math.round(wmm)} × ${Math.round(hmm)} mm`, cw/2, ch/2 + Math.min(cw,ch)*0.085);
+  return srgb(new THREE.CanvasTexture(cv));
+}
+function makeInnerPage(wmm, hmm, num){
+  const scale = Math.min(3, 1200 / Math.max(wmm, hmm));
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(wmm*scale); cv.height = Math.round(hmm*scale);
+  const g = cv.getContext('2d');
+  g.fillStyle = '#faf7f0'; g.fillRect(0, 0, cv.width, cv.height);
+  g.strokeStyle = 'rgba(0,0,0,.07)';
+  const m = 12 * scale;
+  for (let y = m*2; y < cv.height - m*2.4; y += 7*scale){
+    g.beginPath(); g.moveTo(m, y); g.lineTo(cv.width - m, y);
+    g.lineWidth = 2.4*scale*0.45; g.stroke();
+  }
+  g.fillStyle = 'rgba(0,0,0,.35)';
+  g.font = `${Math.round(cv.height*0.035)}px -apple-system,Segoe UI,sans-serif`;
+  g.textAlign = 'center';
+  g.fillText(String(num), cv.width/2, cv.height - m*0.9);
+  return srgb(new THREE.CanvasTexture(cv));
+}
+
+/* --------- Matériaux --------- */
+function paperMat(tex){
+  const f = FINISH[state.finish];
+  return new THREE.MeshPhysicalMaterial({
+    map: tex || null,
+    color: tex ? 0xffffff : 0xf3f0e9,
+    roughness: f.rough,
+    clearcoat: f.cc,
+    clearcoatRoughness: 0.35,
+    envMapIntensity: f.env
+  });
+}
+function edgeMat(){
+  return new THREE.MeshStandardMaterial({color:0xf6f3ec, roughness:0.92});
+}
+function panelMesh(w, h, t, texF, texB){
+  const geo = new THREE.BoxGeometry(w, h, t);
+  const e = edgeMat();
+  const mesh = new THREE.Mesh(geo, [e, e, e, e, paperMat(texF), paperMat(texB)]);
+  mesh.castShadow = mesh.receiveShadow = true;
+  return mesh;
+}
+
+/* ================= Constructions ================= */
+function disposeGroup(g){
+  g.traverse(o => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material){
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      for (const m of mats){ if (m.map) m.map.dispose(); m.dispose(); }
+    }
+  });
+}
+
+/* Chaîne de volets articulés (dépliants) */
+function makeChain(panels, anchor, h, t){
+  const root = new THREE.Group();
+  root.add(panelMesh(panels[anchor].w, h, t, panels[anchor].texF, panels[anchor].texB));
+  const hingesR = [], hingesL = [];
+  let parent = root, edge = panels[anchor].w / 2;
+  for (let i = anchor+1; i < panels.length; i++){
+    const g = new THREE.Group(); g.position.x = edge;
+    const m = panelMesh(panels[i].w, h, t, panels[i].texF, panels[i].texB);
+    m.position.x = panels[i].w / 2;
+    g.add(m); parent.add(g); hingesR.push(g);
+    parent = g; edge = panels[i].w;
+  }
+  parent = root; edge = -panels[anchor].w / 2;
+  for (let i = anchor-1; i >= 0; i--){
+    const g = new THREE.Group(); g.position.x = edge;
+    const m = panelMesh(panels[i].w, h, t, panels[i].texF, panels[i].texB);
+    m.position.x = -panels[i].w / 2;
+    g.add(m); parent.add(g); hingesL.push(g);
+    parent = g; edge = -panels[i].w;
+  }
+  return {root, hingesR, hingesL};
+}
+
+function foldSpec(product){
+  // widthsMul : largeur de chaque volet en multiple du format fermé
+  switch (product){
+    case 'depliant2':  return {widthsMul:[1,1],       anchor:0};
+    case 'depliant3r': return {widthsMul:[1,1,0.97],  anchor:1};
+    case 'depliant3z': return {widthsMul:[1,1,1],     anchor:0};
+    case 'fenetre':    return {widthsMul:[0.5,1,0.5], anchor:1};
+  }
+}
+
+function buildFold(){
+  const {w, h} = closedSize();
+  const spec = foldSpec(state.product);
+  const widths = spec.widthsMul.map(m => m * w);
+  const openW = widths.reduce((a,b)=>a+b, 0);
+  const t = paperThicknessU() / MM; // en mm pour cohérence, converti plus bas
+
+  // textures : recto/verso = planche ouverte complète
+  let guides = []; let cum = 0;
+  for (let i = 0; i < widths.length-1; i++){ cum += widths[i]; guides.push(cum); }
+  const recto = state.recto || makePlaceholder(openW, h, 'RECTO', guides);
+  const verso = state.verso || makePlaceholder(openW, h, 'VERSO', guides);
+
+  const panels = [];
+  cum = 0;
+  for (let i = 0; i < widths.length; i++){
+    const ox = cum / openW, rx = widths[i] / openW;
+    const oxB = 1 - ox - rx; // région miroir sur le verso
+    panels.push({
+      w: widths[i] * MM,
+      texF: region(recto, ox, rx),
+      texB: region(verso, oxB, rx)
+    });
+    cum += widths[i];
+  }
+
+  const chain = makeChain(panels, spec.anchor, h * MM, t * MM);
+
+  const applyFold = f => {
+    const e = ease(clamp01(f));
+    const s1 = ease(clamp01(f / 0.55));
+    const s2 = ease(clamp01((f - 0.45) / 0.55));
+    switch (state.product){
+      case 'depliant2':
+        chain.hingesR[0].rotation.y = rad(172) * e;
+        break;
+      case 'depliant3r':
+        chain.hingesR[0].rotation.y = rad(166) * s1;   // volet droit se replie d'abord
+        chain.hingesL[0].rotation.y = -rad(172) * s2;  // volet gauche recouvre
+        break;
+      case 'depliant3z':
+        chain.hingesR[0].rotation.y = rad(168) * e;
+        chain.hingesR[1].rotation.y = -rad(168) * e;
+        break;
+      case 'fenetre':
+        chain.hingesL[0].rotation.y = -rad(162) * e;
+        chain.hingesR[0].rotation.y = rad(162) * e;
+        break;
+    }
+  };
+  applyFold(state.foldCur);
+
+  return {kind:'fold', group:chain.root, applyFold,
+          openW, openH:h, closedW:w, closedH:h};
+}
+
+function buildFlat(){
+  const {w, h} = closedSize();
+  const recto = state.recto || makePlaceholder(w, h, 'RECTO');
+  const verso = state.verso || makePlaceholder(w, h, 'VERSO');
+  const group = new THREE.Group();
+  group.add(panelMesh(w*MM, h*MM, paperThicknessU(),
+    region(recto, 0, 1), region(verso, 0, 1)));
+  return {kind:'flat', group, openW:w, openH:h, closedW:w, closedH:h};
+}
+
+function buildBook(){
+  const {w, h} = closedSize();
+  const isLivre = state.product === 'livre';
+  const THB = 1.2; // épaisseur quasi réelle pour les livrets (évite le décalage au dos)
+  const pageT = PAPER_T[135] * THB * MM;
+  const coverT = (isLivre ? 0.9 : PAPER_T[state.paper]) * THB * MM;
+
+  // Pages disponibles
+  let pageTex = state.pages.slice(0, MAX_PDF_PAGES);
+  let total = pageTex.length;
+  if (total < 2){
+    total = state.pagesCount;
+    pageTex = [];
+    pageTex[0] = state.recto || makePlaceholder(w, h, 'COUVERTURE');
+    for (let i = 1; i < total-1; i++) pageTex[i] = makeInnerPage(w, h, i+1);
+    pageTex[total-1] = state.verso || makePlaceholder(w, h, '4e DE COUV.');
+  }
+  if (total % 2) { pageTex.push(makeInnerPage(w, h, total+1)); total++; }
+  const S = total / 2; // nombre de feuillets
+
+  const group = new THREE.Group();
+  const sheets = [];
+  const eps = Math.min(0.005, 0.05 / S);
+  // Empilement physique : chaque feuillet occupe sa propre hauteur dans la pile
+  const gapK = 1.06; // marge anti chevauchement
+  const ts = [];
+  for (let i = 0; i < S; i++) ts.push(((i === 0 || i === S-1) ? coverT : pageT) * gapK);
+  const above = [], below = [];
+  { let a = 0; for (let i = 0; i < S; i++){ above[i] = a; a += ts[i]; } }
+  { let b = 0; for (let i = S-1; i >= 0; i--){ below[i] = b; b += ts[i]; } }
+  const totalT = ts.reduce((x,y)=>x+y, 0);
+
+  for (let i = 0; i < S; i++){
+    const g = new THREE.Group();
+    const t = (i === 0 || i === S-1) ? coverT : pageT;
+    const grow = (isLivre && (i === 0 || i === S-1)) ? 1.5 : 0; // débord de couverture (mm)
+    const m = panelMesh((w + grow) * MM, (h + grow*2) * MM, t,
+      region(pageTex[2*i], 0, 1), region(pageTex[2*i+1] || null, 0, 1));
+    m.position.x = (w + grow) * MM / 2;
+    const zR = below[i] + ts[i]/2; // hauteur dans la pile de droite (non tournée)
+    const zL = above[i] + ts[i]/2; // hauteur dans la pile de gauche (tournée)
+    m.position.z = zR;
+    g.add(m);
+    group.add(g);
+    sheets.push({g, m, zR, zL, phi: eps*(S-i), target: eps*(S-i)});
+  }
+  group.position.z = -totalT / 2;
+  // dos de livre
+  if (isLivre){
+    const spineT = Math.max(S * pageT * 0.9, coverT*2);
+    const spine = new THREE.Mesh(
+      new THREE.BoxGeometry(spineT, (h+3)*MM, coverT),
+      paperMat(null)
+    );
+    spine.material.color.set(0xe8e2d5);
+    spine.rotation.y = Math.PI/2;
+    spine.position.set(-coverT, 0, -spineT/2);
+    spine.castShadow = true;
+    group.add(spine);
+  }
+  group.position.x = -w * MM / 2; // centre le livre fermé
+
+  const applyPage = p => {
+    for (let i = 0; i < S; i++){
+      sheets[i].target = (i < p) ? Math.PI - eps*(i+1) : eps*(S-i);
+    }
+  };
+  applyPage(state.page);
+
+  return {kind:'book', group, sheets, sheetCount:S, applyPage,
+          openW:w*2, openH:h, closedW:w, closedH:h};
+}
+
+/* ================= Rebuild & cadrage ================= */
+function rebuild(){
+  if (productGroup){
+    scene.remove(productGroup);
+    disposeGroup(productGroup);
+  }
+  const kind = PRODUCTS[state.product].kind;
+  currentBuild = kind === 'fold' ? buildFold()
+               : kind === 'book' ? buildBook()
+               : buildFlat();
+  productGroup = new THREE.Group();
+  productGroup.add(currentBuild.group);
+  scene.add(productGroup);
+
+  // sol + lumière adaptés à la taille
+  const size = Math.max(currentBuild.openW, currentBuild.openH) * MM;
+  ground.geometry.dispose();
+  ground.geometry = new THREE.PlaneGeometry(size*14, size*14);
+  ground.position.y = -currentBuild.openH * MM * 0.62;
+  sun.position.set(size*0.9, size*1.6, size*1.1);
+  const sc = sun.shadow.camera;
+  sc.left = -size*1.8; sc.right = size*1.8; sc.top = size*1.8; sc.bottom = -size*1.8;
+  sc.far = size*8; sc.updateProjectionMatrix();
+  sun.shadow.normalBias = size * 0.012; // évite l'acné d'ombre entre pages proches
+
+  updateUI();
+  updateInfo();
+}
+function frameView(){
+  const size = Math.max(currentBuild.openW * 0.72, currentBuild.openH) * MM;
+  camera.position.set(size*0.7, size*0.42, size*1.55);
+  controls.target.set(0, 0, 0);
+  controls.update();
+}
+
+/* ================= Fichiers ================= */
+function texFromImage(img){
+  const t = new THREE.Texture(img);
+  t.needsUpdate = true;
+  return srgb(t);
+}
+async function loadImageFile(file){
+  const url = URL.createObjectURL(file);
+  const img = await new Promise((res, rej) => {
+    const i = new Image();
+    i.onload = () => res(i);
+    i.onerror = rej;
+    i.src = url;
+  });
+  return {tex: texFromImage(img), px:{w:img.naturalWidth, h:img.naturalHeight}};
+}
+async function loadPdfFile(file, onProgress){
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+  const n = Math.min(pdf.numPages, MAX_PDF_PAGES);
+  const texs = [];
+  for (let p = 1; p <= n; p++){
+    onProgress?.(p, n);
+    const page = await pdf.getPage(p);
+    const vp1 = page.getViewport({scale: 1});
+    const scale = Math.min(3, 1700 / Math.max(vp1.width, vp1.height));
+    const vp = page.getViewport({scale});
+    const cv = document.createElement('canvas');
+    cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
+    await page.render({canvasContext: cv.getContext('2d'), viewport: vp}).promise;
+    texs.push(srgb(new THREE.CanvasTexture(cv)));
+  }
+  return {texs, numPages: pdf.numPages};
+}
+async function handleFile(file, slot){
+  if (!file) return;
+  const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+  try{
+    if (isPdf){
+      toast('Lecture du PDF…');
+      const {texs, numPages} = await loadPdfFile(file, (p,n)=>toast(`Rendu page ${p}/${n}…`, 4000));
+      if (slot === 'recto'){
+        state.pages = texs;
+        state.recto = texs[0] || null;
+        if (texs[1]) state.verso = texs[1];
+        state.rectoInfo = {type:'pdf', name:file.name, pages:numPages};
+        if (texs[1] && !state.versoInfo) state.versoInfo = {type:'pdf', name:file.name + ' (p.2)'};
+        $('fnameRecto').textContent = `${file.name} — ${numPages} page(s)`;
+        if (texs[1]) $('fnameVerso').textContent = `${file.name} (page 2)`;
+      } else {
+        state.verso = texs[0] || null;
+        state.versoInfo = {type:'pdf', name:file.name};
+        $('fnameVerso').textContent = file.name;
+      }
+      toast('PDF chargé ✔');
+    } else {
+      const {tex, px} = await loadImageFile(file);
+      if (slot === 'recto'){
+        state.recto = tex; state.pages = [];
+        state.rectoInfo = {type:'img', name:file.name, px};
+        $('fnameRecto').textContent = `${file.name} — ${px.w}×${px.h} px`;
+      } else {
+        state.verso = tex;
+        state.versoInfo = {type:'img', name:file.name, px};
+        $('fnameVerso').textContent = `${file.name} — ${px.w}×${px.h} px`;
+      }
+      toast('Image chargée ✔');
+    }
+    rebuild();
+  } catch(err){
+    console.error(err);
+    toast('⚠ Impossible de lire ce fichier');
+  }
+}
+
+/* ================= Infos & DPI ================= */
+function dpiLabel(info, targetWmm){
+  if (!info) return '<span class="dpi-warn">aucun fichier</span>';
+  if (info.type === 'pdf') return '<span class="dpi-ok">PDF — qualité optimale</span>';
+  const dpi = Math.round(info.px.w / (targetWmm / 25.4));
+  const cls = dpi >= 250 ? 'dpi-ok' : dpi >= 150 ? 'dpi-warn' : 'dpi-bad';
+  const note = dpi >= 250 ? 'excellent' : dpi >= 150 ? 'correct' : 'trop faible pour l\'impression';
+  return `<span class="${cls}">≈ ${dpi} DPI (${note})</span>`;
+}
+function updateInfo(){
+  const b = currentBuild;
+  const p = PRODUCTS[state.product];
+  let html = `<b>${p.label}</b><br>`;
+  html += `Fermé : <b>${Math.round(b.closedW)} × ${Math.round(b.closedH)} mm</b><br>`;
+  if (b.openW !== b.closedW)
+    html += `Ouvert : <b>${Math.round(b.openW)} × ${Math.round(b.openH)} mm</b><br>`;
+  html += `Papier : ${state.paper} g/m² — ${ $('finish').selectedOptions[0].textContent }<br>`;
+  if (p.kind === 'book' && currentBuild.sheetCount)
+    html += `Pagination : <b>${currentBuild.sheetCount * 2} pages</b><br>`;
+  html += `Recto : ${dpiLabel(state.rectoInfo, b.openW)}<br>`;
+  html += `Verso : ${dpiLabel(state.versoInfo, b.openW)}`;
+  $('infos').innerHTML = html;
+}
+function updateUI(){
+  const kind = PRODUCTS[state.product].kind;
+  $('foldSection').style.display = kind === 'fold' ? '' : 'none';
+  $('pageSection').style.display = kind === 'book' ? '' : 'none';
+  $('pagesCountWrap').style.display = (kind === 'book' && state.pages.length < 2) ? '' : 'none';
+  if (kind === 'book'){
+    const s = $('pageSlider');
+    s.max = currentBuild.sheetCount;
+    if (+s.value > currentBuild.sheetCount){ s.value = 0; state.page = 0; }
+    updatePageOut();
+  }
+}
+function updatePageOut(){
+  const v = +$('pageSlider').value;
+  $('pageOut').textContent = v === 0 ? 'Couv.' : `p. ${v*2}-${v*2+1}`;
+}
+
+/* ================= Événements UI ================= */
+$('product').addEventListener('change', e => {
+  state.product = e.target.value;
+  const def = DEFAULT_FORMAT[state.product];
+  state.format = def;
+  $('format').value = def;
+  $('customRow').style.display = 'none';
+  state.page = 0; $('pageSlider').value = 0;
+  rebuild(); frameView();
+});
+$('format').addEventListener('change', e => {
+  state.format = e.target.value;
+  $('customRow').style.display = state.format === 'CUSTOM' ? 'flex' : 'none';
+  rebuild(); frameView();
+});
+$('customW').addEventListener('change', e => { state.customW = Math.max(20, +e.target.value||210); rebuild(); frameView(); });
+$('customH').addEventListener('change', e => { state.customH = Math.max(20, +e.target.value||297); rebuild(); frameView(); });
+
+for (const btn of $('orientSeg').querySelectorAll('button')){
+  btn.addEventListener('click', () => {
+    $('orientSeg').querySelectorAll('button').forEach(b => b.classList.remove('on'));
+    btn.classList.add('on');
+    state.orientation = btn.dataset.v;
+    rebuild(); frameView();
+  });
+}
+$('paper').addEventListener('change', e => { state.paper = +e.target.value; rebuild(); });
+$('finish').addEventListener('change', () => { state.finish = $('finish').value; rebuild(); });
+$('pagesCount').addEventListener('input', e => {
+  state.pagesCount = +e.target.value;
+  $('pagesCountOut').textContent = e.target.value + ' p.';
+  rebuild();
+});
+
+$('foldSlider').addEventListener('input', e => {
+  state.foldTarget = +e.target.value / 100;
+  $('foldOut').textContent = e.target.value + ' %';
+});
+$('foldToggle').addEventListener('click', () => {
+  state.foldTarget = state.foldTarget > 0.5 ? 0 : 1;
+});
+$('pageSlider').addEventListener('input', e => {
+  state.page = +e.target.value;
+  updatePageOut();
+  currentBuild?.applyPage?.(state.page);
+});
+$('pageNext').addEventListener('click', () => {
+  const s = $('pageSlider');
+  s.value = (+s.value + 1) % (+s.max + 1);
+  state.page = +s.value;
+  updatePageOut();
+  currentBuild?.applyPage?.(state.page);
+});
+
+$('autoRotate').addEventListener('change', e => { controls.autoRotate = e.target.checked; controls.autoRotateSpeed = 1.6; });
+$('resetView').addEventListener('click', frameView);
+$('themeToggle').addEventListener('click', () => stage.classList.toggle('dark'));
+$('capture').addEventListener('click', () => {
+  renderer.render(scene, camera);
+  const a = document.createElement('a');
+  a.href = renderer.domElement.toDataURL('image/png');
+  a.download = `apercu-${state.product}.png`;
+  a.click();
+  toast('Aperçu téléchargé 📸');
+});
+
+/* ================= Partage client ================= */
+let clientMode = false;
+let shareBoot = null;
+try { shareBoot = JSON.parse($('shareData').textContent); } catch(e){ shareBoot = null; }
+
+function texToDataURL(tex, maxDim = 1400){
+  const src = tex.image;
+  if (!src) return null;
+  const w = src.width || src.naturalWidth, h = src.height || src.naturalHeight;
+  const s = Math.min(1, maxDim / Math.max(w, h));
+  const cv = document.createElement('canvas');
+  cv.width = Math.max(1, Math.round(w*s));
+  cv.height = Math.max(1, Math.round(h*s));
+  cv.getContext('2d').drawImage(src, 0, 0, cv.width, cv.height);
+  return cv.toDataURL('image/jpeg', 0.82);
+}
+async function texFromDataURL(url){
+  const img = await new Promise((res, rej) => {
+    const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url;
+  });
+  return texFromImage(img);
+}
+async function shareWithClient(){
+  toast('Préparation de l\'aperçu client…', 6000);
+  const data = {
+    v: 1,
+    s: {product:state.product, format:state.format, customW:state.customW, customH:state.customH,
+        orientation:state.orientation, paper:state.paper, finish:state.finish,
+        pagesCount:state.pagesCount, fold:state.foldTarget, page:state.page},
+    recto: state.recto ? texToDataURL(state.recto) : null,
+    verso: state.verso ? texToDataURL(state.verso) : null,
+    pages: state.pages.slice(0, MAX_PDF_PAGES).map(t => texToDataURL(t, 1200)),
+    rectoInfo: state.rectoInfo, versoInfo: state.versoInfo
+  };
+  // source de la page : via HTTP si hébergée, sinon reconstruction du DOM
+  let src = null;
+  try {
+    const r = await fetch(location.href);
+    if (r.ok) src = await r.text();
+  } catch(e){}
+  if (!src || !src.includes('id="shareData"')){
+    const clone = document.documentElement.cloneNode(true);
+    clone.querySelectorAll('#stage canvas').forEach(n => n.remove());
+    src = '<!doctype html>\n' + clone.outerHTML;
+  }
+  const json = JSON.stringify(data).replace(/<\//g, '<\\/');
+  src = src.replace(/<script id="shareData"[^>]*>[\s\S]*?<\/script>/,
+    '<script id="shareData" type="application/json">' + json + '<\/script>');
+  const blob = new Blob([src], {type:'text/html'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `apercu-client-${state.product}.html`;
+  a.click();
+  toast('Aperçu client téléchargé ✔ — envoyez le fichier HTML à votre client');
+}
+$('shareBtn').addEventListener('click', shareWithClient);
+
+async function applyShare(d){
+  clientMode = true;
+  document.body.classList.add('client');
+  document.querySelector('.tagline').textContent =
+    'Aperçu interactif envoyé par votre graphiste — pivotez, pliez, feuilletez 🖱️';
+  Object.assign(state, {
+    product:d.s.product, format:d.s.format, customW:d.s.customW, customH:d.s.customH,
+    orientation:d.s.orientation, paper:d.s.paper, finish:d.s.finish,
+    pagesCount:d.s.pagesCount, foldTarget:d.s.fold, foldCur:d.s.fold, page:d.s.page || 0
+  });
+  state.rectoInfo = d.rectoInfo; state.versoInfo = d.versoInfo;
+  if (d.recto) state.recto = await texFromDataURL(d.recto);
+  if (d.verso) state.verso = await texFromDataURL(d.verso);
+  state.pages = [];
+  for (const p of (d.pages || [])) state.pages.push(await texFromDataURL(p));
+  // synchronisation de l'UI restante
+  $('product').value = state.product;
+  $('format').value = state.format;
+  $('paper').value = String(state.paper);
+  $('finish').value = state.finish;
+  const pc = Math.round(state.foldTarget * 100);
+  $('foldSlider').value = pc;
+  $('foldOut').textContent = pc + ' %';
+  $('pageSlider').value = state.page;
+}
+
+/* --------- Upload / drag & drop --------- */
+function wireDrop(zoneId, inputId, slot){
+  const zone = $(zoneId), input = $(inputId);
+  zone.addEventListener('click', () => input.click());
+  input.addEventListener('change', () => handleFile(input.files[0], slot));
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('over');
+    handleFile(e.dataTransfer.files[0], slot);
+  });
+}
+wireDrop('dropRecto', 'fileRecto', 'recto');
+wireDrop('dropVerso', 'fileVerso', 'verso');
+
+// glisser-déposer n'importe où → recto
+let dragDepth = 0;
+window.addEventListener('dragenter', e => {
+  if (e.target.closest?.('.drop')) return;
+  dragDepth++; $('dropOverlay').classList.add('show');
+});
+window.addEventListener('dragleave', () => {
+  if (--dragDepth <= 0){ dragDepth = 0; $('dropOverlay').classList.remove('show'); }
+});
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => {
+  e.preventDefault();
+  dragDepth = 0; $('dropOverlay').classList.remove('show');
+  if (!e.target.closest?.('.drop') && e.dataTransfer.files.length)
+    handleFile(e.dataTransfer.files[0], 'recto');
+});
+
+/* ================= Boucle de rendu ================= */
+function animate(){
+  requestAnimationFrame(animate);
+
+  // pliage progressif
+  if (currentBuild?.kind === 'fold'){
+    const d = state.foldTarget - state.foldCur;
+    if (Math.abs(d) > 0.0004){
+      state.foldCur += d * 0.09;
+      currentBuild.applyFold(state.foldCur);
+      const pc = Math.round(state.foldCur * 100);
+      $('foldSlider').value = pc;
+      $('foldOut').textContent = pc + ' %';
+    }
+  }
+  // feuilletage progressif
+  if (currentBuild?.kind === 'book'){
+    for (const s of currentBuild.sheets){
+      const d = s.target - s.phi;
+      if (Math.abs(d) > 0.0004) s.phi += d * 0.11;
+      s.g.rotation.y = -s.phi;
+      // hauteur de pile interpolée pendant la rotation (évite le z-fighting au dos)
+      const f = s.phi / Math.PI;
+      s.m.position.z = s.zR * (1 - f) - s.zL * f;
+    }
+  }
+
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+/* ================= Démarrage ================= */
+resize();
+(async () => {
+  if (shareBoot && shareBoot.v){
+    try { await applyShare(shareBoot); }
+    catch(err){ console.error(err); toast('⚠ Données de partage illisibles'); }
+  }
+  rebuild();
+  frameView();
+  animate();
+  toast(clientMode
+    ? 'Aperçu 3D chargé — faites-le pivoter à la souris 👋'
+    : 'Bienvenue ! Choisissez un produit puis déposez vos fichiers 👋', 4200);
+})();
+</script>
+</body>
+</html>
